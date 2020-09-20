@@ -1,14 +1,13 @@
-package stream
+package Speech2Text
 
 import (
 	speech "cloud.google.com/go/speech/apiv1"
 	"context"
+	"encoding/json"
 	"fmt"
-	"github.com/cheggaaa/pb/v3"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"io"
 	"log"
-	"os"
 	"sync"
 	"time"
 )
@@ -17,13 +16,12 @@ type Stream struct {
 	ctx          context.Context
 	speechClient *speech.Client
 	speechStream speechpb.Speech_StreamingRecognizeClient
-	file         *os.File
-	fileBuffer   []byte
-	progressBar  *pb.ProgressBar
+	fileBuffer   chan []byte
+	StreamResp   chan []byte
 	mutex        *sync.Mutex
 }
 
-func NewStream(ctx context.Context, file *os.File) Stream {
+func NewStream(ctx context.Context, fileBuffer chan []byte) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -34,20 +32,12 @@ func NewStream(ctx context.Context, file *os.File) Stream {
 		log.Fatal(err)
 	}
 
-	fileStat, _ := file.Stat()
-	fileSize := fileStat.Size()
-
-	progressBar := pb.StartNew(int(fileSize / 32000))
-
-	fileBuffer := make([]byte, 32000)
-
 	stream := Stream{
 		ctx:          ctx,
 		speechClient: client,
 		speechStream: speechStream,
-		file:         file,
 		fileBuffer:   fileBuffer,
-		progressBar:  progressBar,
+		StreamResp:   make(chan []byte),
 		mutex:        &sync.Mutex{},
 	}
 
@@ -72,29 +62,19 @@ func (s *Stream) InitStream() {
 
 func (s *Stream) StartStream() {
 	for {
-		n, err := s.file.Read(s.fileBuffer)
+		fileBuffer := <-s.fileBuffer
 		s.mutex.Lock()
-		if n > 0 {
+		if len(fileBuffer) > 0 {
 			if err := s.speechStream.Send(&speechpb.StreamingRecognizeRequest{
 				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
-					AudioContent: s.fileBuffer[:n],
+					AudioContent: fileBuffer,
 				},
 			}); err != nil {
 				log.Printf("Could not send audio: %v", err)
 			}
+		} else {
+			break
 		}
-		if err == io.EOF {
-			// Nothing else to pipe, close the stream.
-			if err := s.speechStream.CloseSend(); err != nil {
-				log.Fatalf("Could not close stream: %v", err)
-			}
-			s.mutex.Unlock()
-			return
-		}
-		if err != nil {
-			log.Printf("Could not read from file: %v", err)
-		}
-		s.progressBar.Increment()
 		s.mutex.Unlock()
 	}
 }
@@ -113,7 +93,8 @@ func (s *Stream) Listen(done chan bool) {
 			log.Fatalf("Could not recognize: %v", err)
 		}
 		for _, result := range resp.Results {
-			fmt.Printf("Result: %+v\n", result)
+			serialized, _ := json.Marshal(result)
+			s.StreamResp <- serialized
 		}
 	}
 	done <- true
