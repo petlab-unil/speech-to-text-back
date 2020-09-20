@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"log"
-	"s2t/stream"
 	"os"
+	"s2t/stream"
 )
 
 func main() {
@@ -20,8 +20,5 @@ func main() {
 
 	defer file.Close()
 	s := stream.NewStream(ctx, file)
-	s.InitStream()
-	go s.StartStream()
-	go s.RestartDaemon()
-	s.Listen()
+	s.Start()
 }

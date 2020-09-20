@@ -37,9 +37,9 @@ func NewStream(ctx context.Context, file *os.File) Stream {
 	fileStat, _ := file.Stat()
 	fileSize := fileStat.Size()
 
-	progressBar := pb.StartNew(int(fileSize / 16000))
+	progressBar := pb.StartNew(int(fileSize / 32000))
 
-	fileBuffer := make([]byte, 16000)
+	fileBuffer := make([]byte, 32000)
 
 	stream := Stream{
 		ctx:          ctx,
@@ -59,8 +59,8 @@ func (s *Stream) InitStream() {
 		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
 			StreamingConfig: &speechpb.StreamingRecognitionConfig{
 				Config: &speechpb.RecognitionConfig{
-					Encoding:        speechpb.RecognitionConfig_LINEAR16,
-					SampleRateHertz: 16000,
+					Encoding:        speechpb.RecognitionConfig_FLAC,
+					SampleRateHertz: 32000,
 					LanguageCode:    "fr-FR",
 				},
 			},
@@ -93,18 +93,15 @@ func (s *Stream) StartStream() {
 		}
 		if err != nil {
 			log.Printf("Could not read from file: %v", err)
-			s.mutex.Unlock()
-			continue
 		}
 		s.progressBar.Increment()
 		s.mutex.Unlock()
 	}
 }
 
-func (s *Stream) Listen() {
+func (s *Stream) Listen(done chan bool) {
 	for {
 		resp, err := s.speechStream.Recv()
-		println("got resp")
 		if err == io.EOF {
 			fmt.Printf("EOF\n")
 			break
@@ -119,20 +116,28 @@ func (s *Stream) Listen() {
 			fmt.Printf("Result: %+v\n", result)
 		}
 	}
+	done <- true
 }
 
-func (s *Stream) RestartDaemon() {
-	for {
-		duration := 59 * time.Second
-		time.Sleep(duration)
-		s.mutex.Lock()
-		_ = s.speechStream.CloseSend()
-		speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
-		if err != nil {
-			log.Fatal(err)
+func (s *Stream) Start() {
+	s.InitStream()
+	go s.StartStream()
+	done := make(chan bool)
+	go s.Listen(done)
+	go func() {
+		for {
+			duration := 20 * time.Second
+			time.Sleep(duration)
+			s.mutex.Lock()
+			_ = s.speechStream.CloseSend()
+			speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
+			if err != nil {
+				log.Fatal(err)
+			}
+			s.speechStream = speechStream
+			s.InitStream()
+			s.mutex.Unlock()
 		}
-		s.speechStream = speechStream
-		s.InitStream()
-		s.mutex.Unlock()
-	}
+	}()
+	<-done
 }
