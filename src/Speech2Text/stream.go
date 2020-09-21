@@ -19,9 +19,10 @@ type Stream struct {
 	fileBuffer   chan []byte
 	StreamResp   chan []byte
 	mutex        *sync.Mutex
+	size         int
 }
 
-func NewStream(ctx context.Context, fileBuffer chan []byte) Stream {
+func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -39,6 +40,7 @@ func NewStream(ctx context.Context, fileBuffer chan []byte) Stream {
 		fileBuffer:   fileBuffer,
 		StreamResp:   make(chan []byte),
 		mutex:        &sync.Mutex{},
+		size:         size,
 	}
 
 	return stream
@@ -61,8 +63,10 @@ func (s *Stream) InitStream() {
 }
 
 func (s *Stream) StartStream() {
+	currentSize := 0
 	for {
 		fileBuffer := <-s.fileBuffer
+		currentSize += len(fileBuffer)
 		s.mutex.Lock()
 		if len(fileBuffer) > 0 {
 			if err := s.speechStream.Send(&speechpb.StreamingRecognizeRequest{
@@ -73,6 +77,11 @@ func (s *Stream) StartStream() {
 				log.Printf("Could not send audio: %v", err)
 			}
 		} else {
+			_ = s.speechStream.CloseSend()
+			break
+		}
+		if currentSize >= s.size {
+			_ = s.speechStream.CloseSend()
 			break
 		}
 		s.mutex.Unlock()

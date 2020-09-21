@@ -19,7 +19,7 @@ const (
 	pingPeriod = (pongWait * 9) / 10
 
 	// Maximum message size allowed from peer.
-	maxMessageSize = 1024 * 10
+	maxMessageSize = 32000
 )
 
 var newline = []byte{'\n'}
@@ -41,7 +41,6 @@ func listen(conn *websocket.Conn, fileBuffer chan []byte) {
 			}
 			break
 		}
-
 		fileBuffer <- message
 	}
 }
@@ -78,15 +77,15 @@ func sendResp(conn *websocket.Conn, streamResp chan []byte) {
 	}
 }
 
-func streamS2t(conn *websocket.Conn) {
+func streamS2t(conn *websocket.Conn, size int) {
 	defer conn.Close()
 	initWs(conn)
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
+	s := Speech2Text.NewStream(ctx, fileBuffer, size)
 
-	s := Speech2Text.NewStream(ctx, fileBuffer)
-	s.Start()
 	go listen(conn, fileBuffer)
 	go sendResp(conn, s.StreamResp)
+	s.Start()
 }

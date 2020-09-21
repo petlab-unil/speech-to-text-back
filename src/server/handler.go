@@ -14,8 +14,8 @@ func (my *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.URL.Path == "/" {
-		ServeWs(w, r)
+	if r.URL.Path == "/upload" {
+		UploadWS(w, r)
 		return
 	} else {
 		http.Error(w, "404 not found.", http.StatusNotFound)
