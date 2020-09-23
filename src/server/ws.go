@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"log"
 	"speech-to-text-back/src/Speech2Text"
@@ -45,18 +46,66 @@ func listen(conn *websocket.Conn, fileBuffer chan []byte) {
 	}
 }
 
-func sendResp(conn *websocket.Conn, streamResp chan []byte) {
+type msgType string
+
+const (
+	dataMsg  msgType = "data"
+	errorMsg msgType = "error"
+)
+
+type message struct {
+	MsgType msgType `json:"msg_type"`
+	Msg     string  `json:"msg"`
+}
+
+func sendResp(conn *websocket.Conn, streamResp chan []byte, streamErr chan []byte) {
 	ticker := time.NewTicker(pingPeriod)
 	defer conn.Close()
 	for {
 		select {
-		case message := <-streamResp:
+		case msg := <-streamResp:
 			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
 			w, err := conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
 			}
-			_, _ = w.Write(message)
+
+			endMessage := message{
+				MsgType: dataMsg,
+				Msg:     string(msg),
+			}
+
+			serialized, err := json.Marshal(endMessage)
+
+			_, _ = w.Write(serialized)
+
+			// Add queued chat messages to the current websocket message.
+			n := len(streamResp)
+			for i := 0; i < n; i++ {
+				_, _ = w.Write(newline)
+				_, _ = w.Write(<-streamResp)
+			}
+
+			if err := w.Close(); err != nil {
+				return
+			}
+		case errMsg := <-streamErr:
+			_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+			w, err := conn.NextWriter(websocket.TextMessage)
+			if err != nil {
+				return
+			}
+
+			endMessage := message{
+				MsgType: errorMsg,
+				Msg:     string(errMsg),
+			}
+
+			serialized, err := json.Marshal(endMessage)
+
+			_, _ = w.Write(serialized)
+
+			_, _ = w.Write(errMsg)
 
 			// Add queued chat messages to the current websocket message.
 			n := len(streamResp)
@@ -86,6 +135,6 @@ func streamS2t(conn *websocket.Conn, size int) {
 	s := Speech2Text.NewStream(ctx, fileBuffer, size)
 
 	go listen(conn, fileBuffer)
-	go sendResp(conn, s.StreamResp)
+	go sendResp(conn, s.StreamResp, s.StreamErr)
 	s.Start()
 }

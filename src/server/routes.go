@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"github.com/gorilla/websocket"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -13,7 +14,7 @@ var Upgrader = websocket.Upgrader{
 	WriteBufferSize: 1024,
 }
 
-func UploadWS(w http.ResponseWriter, r *http.Request) {
+func UploadWS(_ *Handler, w http.ResponseWriter, r *http.Request) {
 	sizeStr := r.URL.Query().Get("size")
 	sizeInt, err := strconv.Atoi(sizeStr)
 	if err != nil {
@@ -28,4 +29,8 @@ func UploadWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	streamS2t(conn, sizeInt)
+}
+
+func Test(_ *Handler, w http.ResponseWriter, _ *http.Request) {
+	_, _ = io.WriteString(w, "<-result")
 }

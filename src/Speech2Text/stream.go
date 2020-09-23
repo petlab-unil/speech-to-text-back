@@ -18,8 +18,10 @@ type Stream struct {
 	speechStream speechpb.Speech_StreamingRecognizeClient
 	fileBuffer   chan []byte
 	StreamResp   chan []byte
+	StreamErr    chan []byte
 	mutex        *sync.Mutex
 	size         int
+	inputEOF     bool
 }
 
 func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
@@ -39,6 +41,7 @@ func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
 		speechStream: speechStream,
 		fileBuffer:   fileBuffer,
 		StreamResp:   make(chan []byte),
+		StreamErr:    make(chan []byte),
 		mutex:        &sync.Mutex{},
 		size:         size,
 	}
@@ -46,14 +49,16 @@ func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
 	return stream
 }
 
-func (s *Stream) InitStream() {
+func (s *Stream) initStream() {
 	if err := s.speechStream.Send(&speechpb.StreamingRecognizeRequest{
 		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
 			StreamingConfig: &speechpb.StreamingRecognitionConfig{
 				Config: &speechpb.RecognitionConfig{
-					Encoding:        speechpb.RecognitionConfig_FLAC,
-					SampleRateHertz: 32000,
-					LanguageCode:    "fr-FR",
+					Encoding:                   speechpb.RecognitionConfig_FLAC,
+					SampleRateHertz:            32000,
+					LanguageCode:               "fr-FR",
+					EnableAutomaticPunctuation: true,
+					UseEnhanced:                true,
 				},
 			},
 		},
@@ -62,7 +67,7 @@ func (s *Stream) InitStream() {
 	}
 }
 
-func (s *Stream) StartStream() {
+func (s *Stream) startStream() {
 	currentSize := 0
 	for {
 		fileBuffer := <-s.fileBuffer
@@ -74,7 +79,7 @@ func (s *Stream) StartStream() {
 					AudioContent: fileBuffer,
 				},
 			}); err != nil {
-				log.Printf("Could not send audio: %v", err)
+				s.StreamErr <- []byte(fmt.Sprintf("Could not send audio: %v", err))
 			}
 		} else {
 			_ = s.speechStream.CloseSend()
@@ -86,20 +91,28 @@ func (s *Stream) StartStream() {
 		}
 		s.mutex.Unlock()
 	}
+	s.mutex.Lock()
+	s.inputEOF = true
+	s.mutex.Unlock()
 }
 
-func (s *Stream) Listen(done chan bool) {
+func (s *Stream) listen(done chan bool) {
+	streamCp := s.speechStream
 	for {
-		resp, err := s.speechStream.Recv()
+		resp, err := streamCp.Recv()
 		if err == io.EOF {
 			fmt.Printf("EOF\n")
 			break
 		}
 		if err != nil {
-			log.Fatalf("Cannot stream results: %v", err)
+			serialized, _ := json.Marshal(err)
+			s.StreamResp <- serialized
+			break
 		}
 		if err := resp.Error; err != nil {
-			log.Fatalf("Could not recognize: %v", err)
+			serialized, _ := json.Marshal(err)
+			s.StreamResp <- serialized
+			break
 		}
 		for _, result := range resp.Results {
 			serialized, _ := json.Marshal(result)
@@ -110,22 +123,26 @@ func (s *Stream) Listen(done chan bool) {
 }
 
 func (s *Stream) Start() {
-	s.InitStream()
-	go s.StartStream()
+	s.initStream()
+	go s.startStream()
 	done := make(chan bool)
-	go s.Listen(done)
+	go s.listen(done)
 	go func() {
 		for {
-			duration := 20 * time.Second
+			duration := 5*time.Minute - 30*time.Second
 			time.Sleep(duration)
 			s.mutex.Lock()
+			if s.inputEOF {
+				s.mutex.Unlock()
+				break
+			}
 			_ = s.speechStream.CloseSend()
 			speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
 			if err != nil {
 				log.Fatal(err)
 			}
 			s.speechStream = speechStream
-			s.InitStream()
+			s.initStream()
 			s.mutex.Unlock()
 		}
 	}()

@@ -11,9 +11,11 @@ func main() {
 		return true
 	}
 
+	handler := server.NewHandler()
+
 	s := http.Server{
 		Addr:    ":8080",
-		Handler: new(server.Handler),
+		Handler: handler,
 	}
 
 	// start listening
