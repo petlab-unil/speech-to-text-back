@@ -4,7 +4,6 @@ import (
 	"gopkg.in/mgo.v2"
 	"log"
 	"net/http"
-	"speech-to-text-back/src/server/account"
 )
 
 type Handler struct {
@@ -28,8 +27,10 @@ func NewHandler() *Handler {
 func (h *Handler) defineRoutes() {
 	h.routes.path = "/"
 	h.routes.children = make(map[string]*RouteTree)
-	h.routes.RegisterRoute("/account/login", account.Login)
-	h.routes.RegisterRoute("/account/create", account.Create)
+	h.routes.RegisterRoute("/account/login", Login)
+	h.routes.RegisterRoute("/account/create", AccountCreate)
+	h.routes.RegisterRoute("/sessions/check", SessionsCheck)
+	h.routes.RegisterRoute("/me", MyAccount)
 	h.routes.RegisterRoute("/upload", UploadWS)
 }
 

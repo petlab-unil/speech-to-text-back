@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func createAccount(account *Account, mongoSession *mgo.Session) error {
+func CreateAccount(account *Account, mongoSession *mgo.Session) error {
 	sessionCopy := mongoSession.Copy()
 	defer sessionCopy.Close()
 	collection := sessionCopy.DB("s2t").C("accounts")
@@ -23,36 +23,36 @@ func createAccount(account *Account, mongoSession *mgo.Session) error {
 	return collection.Insert(&account)
 }
 
-func identifyAccount(queriedAccount *Account, mongoSession *mgo.Session) (bool, error) {
+func IdentifyAccount(queriedAccount *Account, mongoSession *mgo.Session) (*bson.ObjectId, error) {
 	sessionCopy := mongoSession.Copy()
 	defer sessionCopy.Close()
 	collection := sessionCopy.DB("s2t").C("accounts")
 	var dbAccount *Account
 	err := collection.Find(bson.M{"name": queriedAccount.Name}).One(&dbAccount)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 
 	if dbAccount == nil {
-		return false, nil
+		return nil, nil
 	}
 
-	bytesHash, err := bcrypt.GenerateFromPassword([]byte(queriedAccount.Password), 14)
+	comparison := bcrypt.CompareHashAndPassword([]byte(dbAccount.Password), []byte(queriedAccount.Password))
 
-	if err != nil {
-		return false, err
+	if comparison != nil {
+		return nil, comparison
 	}
 
-	return string(bytesHash) != dbAccount.Password, nil
+	return &dbAccount.Id, nil
 }
 
-func createSession(account *Account, mongoSession *mgo.Session) (*Session, error) {
+func CreateSession(id bson.ObjectId, mongoSession *mgo.Session) (*Session, error) {
 	sessionCopy := mongoSession.Copy()
 	defer sessionCopy.Close()
 	collection := sessionCopy.DB("s2t").C("sessions")
 
 	session := Session{
-		user:      account.Id,
+		User:      id,
 		CreatedAt: time.Now(),
 	}
 

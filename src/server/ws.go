@@ -6,6 +6,7 @@ import (
 	"github.com/gorilla/websocket"
 	"log"
 	"speech-to-text-back/src/Speech2Text"
+	"speech-to-text-back/src/server/account"
 	"time"
 )
 
@@ -126,13 +127,13 @@ func sendResp(conn *websocket.Conn, streamResp chan []byte, streamErr chan []byt
 	}
 }
 
-func streamS2t(conn *websocket.Conn, size int) {
+func streamS2t(h *Handler, conn *websocket.Conn, size int, newTranslation *account.Translation) {
 	defer conn.Close()
 	initWs(conn)
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
-	s := Speech2Text.NewStream(ctx, fileBuffer, size)
+	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size)
 
 	go listen(conn, fileBuffer)
 	go sendResp(conn, s.StreamResp, s.StreamErr)

@@ -50,6 +50,9 @@ func (t *RouteTree) ExecuteQuery(h *Handler, w http.ResponseWriter, r *http.Requ
 
 	if split[0] != "account" {
 		sessId := r.Header.Get("Authorization")
+		if len(sessId) == 0 {
+			sessId = r.URL.Query().Get("Authorization")
+		}
 		ok, err := account.CheckSession(sessId, h.MongoSession)
 		if !ok {
 			if err != nil {

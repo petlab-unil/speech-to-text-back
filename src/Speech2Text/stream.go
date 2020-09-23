@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
+	"gopkg.in/mgo.v2"
+	"gopkg.in/mgo.v2/bson"
 	"io"
 	"log"
+	"speech-to-text-back/src/server/account"
 	"sync"
 	"time"
 )
@@ -22,9 +25,11 @@ type Stream struct {
 	mutex        *sync.Mutex
 	size         int
 	inputEOF     bool
+	mongoSession *mgo.Session
+	translation  *account.Translation
 }
 
-func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
+func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Session, t *account.Translation, size int) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -44,6 +49,8 @@ func NewStream(ctx context.Context, fileBuffer chan []byte, size int) Stream {
 		StreamErr:    make(chan []byte),
 		mutex:        &sync.Mutex{},
 		size:         size,
+		mongoSession: mongoSession,
+		translation:  t,
 	}
 
 	return stream
@@ -106,16 +113,25 @@ func (s *Stream) listen(done chan bool) {
 		}
 		if err != nil {
 			serialized, _ := json.Marshal(err)
-			s.StreamResp <- serialized
+			s.StreamErr <- serialized
 			break
 		}
 		if err := resp.Error; err != nil {
 			serialized, _ := json.Marshal(err)
-			s.StreamResp <- serialized
+			s.StreamErr <- serialized
 			break
 		}
 		for _, result := range resp.Results {
 			serialized, _ := json.Marshal(result)
+			sessionCopy := s.mongoSession.Copy()
+			collection := sessionCopy.DB("s2t").C("translations")
+			query := bson.M{
+				"$push": bson.M{
+					"transcripts": result,
+				},
+			}
+			collection.UpdateId(s.translation.Id, query)
+			sessionCopy.Close()
 			s.StreamResp <- serialized
 		}
 	}
