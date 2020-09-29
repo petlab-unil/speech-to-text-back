@@ -19,15 +19,12 @@ const (
 
 	// Send pings to peer with this period. Must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
-
-	// Maximum message size allowed from peer.
-	maxMessageSize = 32000
 )
 
 var newline = []byte{'\n'}
 
-func initWs(conn *websocket.Conn) {
-	conn.SetReadLimit(maxMessageSize)
+func initWs(conn *websocket.Conn, packetSize int64) {
+	conn.SetReadLimit(packetSize)
 	conn.SetPongHandler(func(string) error {
 		_ = conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
@@ -127,13 +124,13 @@ func sendResp(conn *websocket.Conn, streamResp chan []byte, streamErr chan []byt
 	}
 }
 
-func streamS2t(h *Handler, conn *websocket.Conn, size int, newTranslation *account.Translation) {
+func streamS2t(h *Handler, conn *websocket.Conn, size int, newTranslation *account.Translation, packetSize, sampleRateHertz int) {
 	defer conn.Close()
-	initWs(conn)
+	initWs(conn, int64(packetSize))
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
-	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size)
+	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size, sampleRateHertz)
 
 	go listen(conn, fileBuffer)
 	go sendResp(conn, s.StreamResp, s.StreamErr)

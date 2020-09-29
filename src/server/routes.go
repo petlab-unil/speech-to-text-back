@@ -11,11 +11,6 @@ import (
 	"strconv"
 )
 
-var Upgrader = websocket.Upgrader{
-	ReadBufferSize:  32000,
-	WriteBufferSize: 1024,
-}
-
 func SessionsCheck(_ *Handler, w http.ResponseWriter, _ *http.Request) {
 	_, _ = fmt.Fprintf(w, "Ok")
 }
@@ -118,13 +113,35 @@ func Login(h *Handler, w http.ResponseWriter, r *http.Request) {
 
 func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 	sizeStr := r.URL.Query().Get("size")
+	packetSize := r.URL.Query().Get("packetSize")
+	sampleRateHertzStr := r.URL.Query().Get("sampleRateHertz")
 	sizeInt, err := strconv.Atoi(sizeStr)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid query param for size: %s", sizeStr), http.StatusNotFound)
 		return
 	}
+	packetInt, err := strconv.Atoi(packetSize)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid query param for size: %s", packetSize), http.StatusNotFound)
+		return
+	}
 
-	conn, err := Upgrader.Upgrade(w, r, nil)
+	sampleRateHertz, err := strconv.Atoi(sampleRateHertzStr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Invalid query param for size: %s", sampleRateHertzStr), http.StatusNotFound)
+		return
+	}
+
+	upgrader := websocket.Upgrader{
+		ReadBufferSize:  packetInt,
+		WriteBufferSize: 1024,
+	}
+
+	upgrader.CheckOrigin = func(r *http.Request) bool {
+		return true
+	}
+
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
 		return
@@ -147,5 +164,5 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streamS2t(h, conn, sizeInt, newTranslation)
+	streamS2t(h, conn, sizeInt, newTranslation, packetInt, sampleRateHertz)
 }

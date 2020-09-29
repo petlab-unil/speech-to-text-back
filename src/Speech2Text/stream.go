@@ -16,20 +16,21 @@ import (
 )
 
 type Stream struct {
-	ctx          context.Context
-	speechClient *speech.Client
-	speechStream speechpb.Speech_StreamingRecognizeClient
-	fileBuffer   chan []byte
-	StreamResp   chan []byte
-	StreamErr    chan []byte
-	mutex        *sync.Mutex
-	size         int
-	inputEOF     bool
-	mongoSession *mgo.Session
-	translation  *account.Translation
+	ctx             context.Context
+	speechClient    *speech.Client
+	speechStream    speechpb.Speech_StreamingRecognizeClient
+	fileBuffer      chan []byte
+	StreamResp      chan []byte
+	StreamErr       chan []byte
+	mutex           *sync.Mutex
+	size            int
+	inputEOF        bool
+	mongoSession    *mgo.Session
+	translation     *account.Translation
+	sampleRateHertz int32
 }
 
-func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Session, t *account.Translation, size int) Stream {
+func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Session, t *account.Translation, size, sampleRateHertz int) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -41,16 +42,17 @@ func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Se
 	}
 
 	stream := Stream{
-		ctx:          ctx,
-		speechClient: client,
-		speechStream: speechStream,
-		fileBuffer:   fileBuffer,
-		StreamResp:   make(chan []byte),
-		StreamErr:    make(chan []byte),
-		mutex:        &sync.Mutex{},
-		size:         size,
-		mongoSession: mongoSession,
-		translation:  t,
+		ctx:             ctx,
+		speechClient:    client,
+		speechStream:    speechStream,
+		fileBuffer:      fileBuffer,
+		StreamResp:      make(chan []byte),
+		StreamErr:       make(chan []byte),
+		mutex:           &sync.Mutex{},
+		size:            size,
+		mongoSession:    mongoSession,
+		translation:     t,
+		sampleRateHertz: int32(sampleRateHertz),
 	}
 
 	return stream
@@ -62,10 +64,15 @@ func (s *Stream) initStream() {
 			StreamingConfig: &speechpb.StreamingRecognitionConfig{
 				Config: &speechpb.RecognitionConfig{
 					Encoding:                   speechpb.RecognitionConfig_FLAC,
-					SampleRateHertz:            32000,
+					SampleRateHertz:            s.sampleRateHertz,
 					LanguageCode:               "fr-FR",
 					EnableAutomaticPunctuation: true,
 					UseEnhanced:                true,
+					DiarizationConfig: &speechpb.SpeakerDiarizationConfig{
+						EnableSpeakerDiarization: true,
+						MinSpeakerCount:          2,
+						MaxSpeakerCount:          3,
+					},
 				},
 			},
 		},
