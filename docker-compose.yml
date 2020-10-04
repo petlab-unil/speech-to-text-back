@@ -1,0 +1,33 @@
+version: '3'
+
+services:
+  back-end:
+    image: s2t
+    container_name: back-end
+    restart: unless-stopped
+    environment:
+      - MONGO_HOST=db
+    ports:
+      - 8080:8080
+    networks:
+      - app-network
+
+  front-end:
+    image: s2t-front
+    container_name: s2t-front
+    restart: unless-stopped
+    ports:
+      - 3000:3000
+
+  db:
+    image: mongo:3.6-xenial
+    container_name: db
+    restart: unless-stopped
+    volumes:
+      - /data/db:/data/db
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

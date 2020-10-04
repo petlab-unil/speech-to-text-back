@@ -4,6 +4,7 @@ import (
 	"gopkg.in/mgo.v2"
 	"log"
 	"net/http"
+	"os"
 )
 
 type Handler struct {
@@ -14,7 +15,7 @@ type Handler struct {
 func NewHandler() *Handler {
 	h := new(Handler)
 	h.defineRoutes()
-	session, err := mgo.Dial("127.0.0.1")
+	session, err := mgo.Dial(os.Getenv("MONGO_HOST"))
 	if err != nil {
 		log.Fatal(err.Error())
 	}
