@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
+	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"io"
 	"log"
 	"net/http"
@@ -117,10 +118,25 @@ func Login(h *Handler, w http.ResponseWriter, r *http.Request) {
 }
 
 func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
+	audioTypeStr := r.URL.Query().Get("audioType")
+	audioTypeInt, err := strconv.Atoi(audioTypeStr)
+	audioType := speechpb.RecognitionConfig_AudioEncoding(audioTypeInt)
+	if err != nil || audioType < 0 || audioType > 7 {
+		http.Error(w, "Invalid, missing or malformed audioType", http.StatusNotFound)
+		return
+	}
+
 	sizeStr := r.URL.Query().Get("size")
 	sizeInt, err := strconv.Atoi(sizeStr)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Invalid query param for size: %s", sizeStr), http.StatusNotFound)
+		return
+	}
+
+	fileName := r.URL.Query().Get("name")
+
+	if len(fileName) == 0 {
+		http.Error(w, "Missing or malformed file name", http.StatusNotFound)
 		return
 	}
 
@@ -130,8 +146,7 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	auth := r.URL.Query()["Authorization"][0]
-	fileName := r.URL.Query()["name"][0]
+	auth := r.URL.Query().Get("Authorization")
 
 	session, err := account.FindSession(h.MongoSession, auth)
 
@@ -147,5 +162,5 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	streamS2t(h, conn, sizeInt, newTranslation)
+	streamS2t(h, conn, sizeInt, newTranslation, audioType)
 }

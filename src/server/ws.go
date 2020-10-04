@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gorilla/websocket"
+	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"log"
 	"speech-to-text-back/src/Speech2Text"
 	"speech-to-text-back/src/server/account"
@@ -127,13 +128,13 @@ func sendResp(conn *websocket.Conn, streamResp chan []byte, streamErr chan []byt
 	}
 }
 
-func streamS2t(h *Handler, conn *websocket.Conn, size int, newTranslation *account.Translation) {
+func streamS2t(h *Handler, conn *websocket.Conn, size int, newTranslation *account.Translation, audioType speechpb.RecognitionConfig_AudioEncoding) {
 	defer conn.Close()
 	initWs(conn)
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
-	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size)
+	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size, audioType)
 
 	go listen(conn, fileBuffer)
 	go sendResp(conn, s.StreamResp, s.StreamErr)

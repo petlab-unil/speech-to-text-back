@@ -27,9 +27,15 @@ type Stream struct {
 	inputEOF     bool
 	mongoSession *mgo.Session
 	translation  *account.Translation
+	audioType    speechpb.RecognitionConfig_AudioEncoding
 }
 
-func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Session, t *account.Translation, size int) Stream {
+func NewStream(ctx context.Context,
+	fileBuffer chan []byte,
+	mongoSession *mgo.Session,
+	t *account.Translation,
+	size int,
+	audioType speechpb.RecognitionConfig_AudioEncoding) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -51,6 +57,7 @@ func NewStream(ctx context.Context, fileBuffer chan []byte, mongoSession *mgo.Se
 		size:         size,
 		mongoSession: mongoSession,
 		translation:  t,
+		audioType:    audioType,
 	}
 
 	return stream
@@ -61,7 +68,7 @@ func (s *Stream) initStream() {
 		StreamingRequest: &speechpb.StreamingRecognizeRequest_StreamingConfig{
 			StreamingConfig: &speechpb.StreamingRecognitionConfig{
 				Config: &speechpb.RecognitionConfig{
-					Encoding:                   speechpb.RecognitionConfig_FLAC,
+					Encoding:                   s.audioType,
 					SampleRateHertz:            32000,
 					LanguageCode:               "fr-FR",
 					EnableAutomaticPunctuation: true,
