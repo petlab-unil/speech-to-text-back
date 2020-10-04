@@ -16,26 +16,29 @@ import (
 )
 
 type Stream struct {
-	ctx          context.Context
-	speechClient *speech.Client
-	speechStream speechpb.Speech_StreamingRecognizeClient
-	fileBuffer   chan []byte
-	StreamResp   chan []byte
-	StreamErr    chan []byte
-	mutex        *sync.Mutex
-	size         int
-	inputEOF     bool
-	mongoSession *mgo.Session
-	translation  *account.Translation
-	audioType    speechpb.RecognitionConfig_AudioEncoding
+	ctx             context.Context
+	speechClient    *speech.Client
+	speechStream    speechpb.Speech_StreamingRecognizeClient
+	fileBuffer      chan []byte
+	StreamResp      chan []byte
+	StreamErr       chan []byte
+	mutex           *sync.Mutex
+	size            int
+	inputEOF        bool
+	mongoSession    *mgo.Session
+	translation     *account.Translation
+	sampleRateHertz int32
+	audioType       speechpb.RecognitionConfig_AudioEncoding
+	model           string
 }
 
 func NewStream(ctx context.Context,
 	fileBuffer chan []byte,
 	mongoSession *mgo.Session,
 	t *account.Translation,
-	size int,
-	audioType speechpb.RecognitionConfig_AudioEncoding) Stream {
+	size, sampleRateHertz int,
+	audioType speechpb.RecognitionConfig_AudioEncoding,
+	model string) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
 		log.Fatal(err)
@@ -47,17 +50,19 @@ func NewStream(ctx context.Context,
 	}
 
 	stream := Stream{
-		ctx:          ctx,
-		speechClient: client,
-		speechStream: speechStream,
-		fileBuffer:   fileBuffer,
-		StreamResp:   make(chan []byte),
-		StreamErr:    make(chan []byte),
-		mutex:        &sync.Mutex{},
-		size:         size,
-		mongoSession: mongoSession,
-		translation:  t,
-		audioType:    audioType,
+		ctx:             ctx,
+		speechClient:    client,
+		speechStream:    speechStream,
+		fileBuffer:      fileBuffer,
+		StreamResp:      make(chan []byte),
+		StreamErr:       make(chan []byte),
+		mutex:           &sync.Mutex{},
+		size:            size,
+		mongoSession:    mongoSession,
+		translation:     t,
+		sampleRateHertz: int32(sampleRateHertz),
+		audioType:       audioType,
+		model:           model,
 	}
 
 	return stream
@@ -69,10 +74,16 @@ func (s *Stream) initStream() {
 			StreamingConfig: &speechpb.StreamingRecognitionConfig{
 				Config: &speechpb.RecognitionConfig{
 					Encoding:                   s.audioType,
-					SampleRateHertz:            32000,
+					SampleRateHertz:            s.sampleRateHertz,
 					LanguageCode:               "fr-FR",
 					EnableAutomaticPunctuation: true,
 					UseEnhanced:                true,
+					Model:                      s.model,
+					DiarizationConfig: &speechpb.SpeakerDiarizationConfig{
+						EnableSpeakerDiarization: true,
+						MinSpeakerCount:          2,
+						MaxSpeakerCount:          3,
+					},
 				},
 			},
 		},

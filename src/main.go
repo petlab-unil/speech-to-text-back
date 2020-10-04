@@ -7,10 +7,6 @@ import (
 )
 
 func main() {
-	server.Upgrader.CheckOrigin = func(r *http.Request) bool {
-		return true
-	}
-
 	handler := server.NewHandler()
 
 	s := http.Server{
