@@ -1,24 +1,43 @@
 package account
 
 import (
+	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"gopkg.in/mgo.v2/bson"
 	"time"
 )
 
 type Alternative struct {
-	Confidence float64 `json:"confidence" bson:"confidence"`
+	Confidence float32 `json:"confidence" bson:"confidence"`
 	Transcript string  `json:"transcript" bson:"transcript"`
 }
 
 type ResultEndTime struct {
-	Nanos   float64 `json:"nanos" bson:"nanos"`
-	Seconds float64 `json:"seconds" bson:"seconds"`
+	Nanos   int32 `json:"nanos" bson:"nanos"`
+	Seconds int64 `json:"seconds" bson:"seconds"`
 }
 
 type Transcript struct {
 	Alternatives  []Alternative `json:"alternatives" bson:"alternatives"`
-	IsFinal       bool          `json:"is_final" bson:"is_final"`
-	ResultEndTime ResultEndTime `json:"result_end_time" bson:"result_end_time"`
+	IsFinal       bool          `json:"isfinal" bson:"isfinal"`
+	ResultEndTime ResultEndTime `json:"resultendtime" bson:"resultendtime"`
+}
+
+func TranscriptFromResult(result *speechpb.StreamingRecognitionResult) Transcript {
+	alternatives := make([]Alternative, len(result.Alternatives))
+	for i, alt := range result.Alternatives {
+		alternatives[i] = Alternative{
+			Confidence: alt.Confidence,
+			Transcript: alt.Transcript,
+		}
+	}
+	return Transcript{
+		Alternatives: alternatives,
+		IsFinal:      result.IsFinal,
+		ResultEndTime: ResultEndTime{
+			Nanos:   result.ResultEndTime.Nanos,
+			Seconds: result.ResultEndTime.Seconds,
+		},
+	}
 }
 
 type Translation struct {
