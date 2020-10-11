@@ -99,8 +99,6 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 		},
 	}
 
-	println(sess.User.Hex())
-
 	collection = sessionCopy.DB("s2t").C("accounts")
 	var a bson.M
 	err = collection.Pipe(query).One(&a)

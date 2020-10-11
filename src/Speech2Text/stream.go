@@ -140,7 +140,7 @@ func (s *Stream) listen(done chan bool) {
 			break
 		}
 		for _, result := range resp.Results {
-			serialized, _ := json.Marshal(result)
+			serialized, _ := json.Marshal(account.TranscriptFromResult(result))
 			sessionCopy := s.mongoSession.Copy()
 			collection := sessionCopy.DB("s2t").C("translations")
 			query := bson.M{
