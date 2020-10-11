@@ -11,8 +11,10 @@ RUN go build -o ./out/speech-to-text-back ./src/main.go
 
 FROM alpine:3.9
 RUN apk add ca-certificates
+WORKDIR	/app
 COPY --from=build_base /app/out/speech-to-text-back /app/speech-to-text-back
-
+COPY unil.json /app/unil.json
 
 EXPOSE 8080
+ENV GOOGLE_APPLICATION_CREDENTIALS=/app/unil.json
 CMD ["/app/speech-to-text-back"]
