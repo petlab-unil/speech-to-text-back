@@ -93,9 +93,6 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 			},
 		},
 		{
-			"$unwind": "$translations",
-		},
-		{
 			"$project": bson.M{
 				"password": 0,
 			},
