@@ -15,7 +15,8 @@ type Handler struct {
 func NewHandler() *Handler {
 	h := new(Handler)
 	h.defineRoutes()
-	session, err := mgo.Dial(os.Getenv("MONGO_HOST"))
+	session, err := mgo.Dial(os.Getenv("MONGO_HOSTNAME"))
+	println(os.Getenv("MONGO_HOSTNAME"))
 	if err != nil {
 		log.Fatal(err.Error())
 	}

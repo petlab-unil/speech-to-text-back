@@ -6,11 +6,13 @@ services:
     container_name: back-end
     restart: unless-stopped
     environment:
-      - MONGO_HOST=db
+      - MONGO_HOSTNAME=db
     ports:
       - 8080:8080
     networks:
       - app-network
+    depends_on:
+      - db
 
   front-end:
     image: s2t-front
@@ -20,13 +22,13 @@ services:
       - 3000:3000
 
   db:
-    image: mongo:3.6-xenial
+    image: mongo:3.6
     container_name: db
     restart: unless-stopped
-    volumes:
-      - /data/db:/data/db
     networks:
       - app-network
+    ports:
+      - "27017:27017"
 
 networks:
   app-network:
