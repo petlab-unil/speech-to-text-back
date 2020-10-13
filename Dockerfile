@@ -16,5 +16,5 @@ COPY --from=build_base /app/out/speech-to-text-back /app/speech-to-text-back
 COPY unil.json /app/unil.json
 
 EXPOSE 8080
-ENV GOOGLE_APPLICATION_CREDENTIALS=/app/unil.json
+
 CMD ["/app/speech-to-text-back"]
