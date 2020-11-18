@@ -6,9 +6,17 @@ import (
 	"time"
 )
 
+type Word struct {
+	StartTime  string `json:"starttime" bson:"starttime"`
+	EndTime    string `json:"endtime" bson:"endtime"`
+	Word       string `json:"word" bson:"word"`
+	SpeakerTag int8   `json:"speakertag" bson:"speakertag"`
+}
+
 type Alternative struct {
 	Confidence float32 `json:"confidence" bson:"confidence"`
 	Transcript string  `json:"transcript" bson:"transcript"`
+	Words      []Word  `json:"words" bson:"words"`
 }
 
 type ResultEndTime struct {

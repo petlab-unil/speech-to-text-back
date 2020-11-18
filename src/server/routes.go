@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/gorilla/websocket"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
+	"gopkg.in/mgo.v2/bson"
 	"io"
 	"log"
 	"net/http"
@@ -27,6 +28,7 @@ func MyAccount(h *Handler, w http.ResponseWriter, r *http.Request) {
 	a, err := account.FullAccount(h.MongoSession, auth)
 
 	if err != nil {
+		println(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -44,6 +46,79 @@ func MyAccount(h *Handler, w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, _ = fmt.Fprintf(w, string(serialized))
+}
+
+func OneTranslation(h *Handler, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	auth := r.Header.Get("Authorization")
+
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+	sessOid := bson.ObjectIdHex(auth)
+	collection := sessionCopy.DB("s2t").C("sessions")
+	var sess account.Session
+	err := collection.FindId(sessOid).One(&sess)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	collection = sessionCopy.DB("s2t").C("translations")
+
+	queryId := r.URL.Query()["id"][0]
+
+	var t account.Translation
+	err = collection.FindId(bson.ObjectIdHex(queryId)).One(&t)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	serialized, err := json.Marshal(t)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, string(serialized))
+}
+
+func TranslationDelete(h *Handler, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	auth := r.Header.Get("Authorization")
+
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+	sessOid := bson.ObjectIdHex(auth)
+	collection := sessionCopy.DB("s2t").C("sessions")
+	var sess account.Session
+	err := collection.FindId(sessOid).One(&sess)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	queryId := r.URL.Query()["id"][0]
+
+	err = account.DeleteTranslation(sessionCopy, &sess, &queryId)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, "ok")
 }
 
 func AccountCreate(h *Handler, w http.ResponseWriter, r *http.Request) {
@@ -180,6 +255,7 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 	}
 
 	model := r.URL.Query().Get("model")
+	language := r.URL.Query().Get("language")
 
-	streamS2t(h, conn, sizeInt, newTranslation, packetInt, sampleRateHertz, audioType, model)
+	streamS2t(h, conn, sizeInt, newTranslation, packetInt, sampleRateHertz, audioType, language, model)
 }

@@ -86,15 +86,36 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 		},
 		{
 			"$lookup": bson.M{
-				"from":         "translations",
-				"localField":   "translations",
-				"foreignField": "_id",
-				"as":           "translations",
+				"from": "translations",
+				"as":   "translations",
+				"let": bson.M{
+					"translationsIdList": "$translations._id",
+				},
+				"pipeline": []bson.M{
+					{
+						"$match": bson.M{},
+					},
+					{
+						"$group": bson.M{
+							"_id": "$_id",
+							"file_name": bson.M{
+								"$first": "$file_name",
+							},
+						},
+					},
+					{
+						"$project": bson.M{
+							"file_name": 1,
+							"_id":       1,
+						},
+					},
+				},
 			},
 		},
 		{
 			"$project": bson.M{
-				"password": 0,
+				"name":         1,
+				"translations": 1,
 			},
 		},
 	}
@@ -108,4 +129,22 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 	}
 
 	return &a, err
+}
+
+func DeleteTranslation(mongoSession *mgo.Session, sess *Session, translationId *string) error {
+	collection := mongoSession.DB("s2t").C("translations")
+	oid := bson.ObjectIdHex(*translationId)
+	err := collection.RemoveId(oid)
+
+	if err != nil {
+		return err
+	}
+	collection = mongoSession.DB("s2t").C("accounts")
+	err = collection.UpdateId(sess.User, bson.M{
+		"$pull": bson.M{
+			"translations": oid,
+		},
+	})
+
+	return err
 }

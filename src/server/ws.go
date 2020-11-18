@@ -57,9 +57,12 @@ type message struct {
 	Msg     string  `json:"msg"`
 }
 
-func sendResp(conn *websocket.Conn, streamResp chan []byte, streamErr chan []byte) {
+func sendResp(conn *websocket.Conn, stream *Speech2Text.Stream, streamResp chan []byte, streamErr chan []byte) {
 	ticker := time.NewTicker(pingPeriod)
 	defer conn.Close()
+	defer func() {
+		stream.Closed = true
+	}()
 	for {
 		select {
 		case msg := <-streamResp:
@@ -131,15 +134,16 @@ func streamS2t(h *Handler,
 	newTranslation *account.Translation,
 	packetSize, sampleRateHertz int,
 	audioType speechpb.RecognitionConfig_AudioEncoding,
+	language string,
 	model string) {
 	defer conn.Close()
 	initWs(conn, int64(packetSize))
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
-	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size, sampleRateHertz, audioType, model)
+	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size, sampleRateHertz, audioType, language, model)
 
 	go listen(conn, fileBuffer)
-	go sendResp(conn, s.StreamResp, s.StreamErr)
+	go sendResp(conn, &s, s.StreamResp, s.StreamErr)
 	s.Start()
 }

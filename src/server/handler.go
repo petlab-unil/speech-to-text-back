@@ -31,6 +31,8 @@ func (h *Handler) defineRoutes() {
 	h.routes.RegisterRoute("/account/login", Login)
 	h.routes.RegisterRoute("/account/create", AccountCreate)
 	h.routes.RegisterRoute("/sessions/check", SessionsCheck)
+	h.routes.RegisterRoute("/translations/one", OneTranslation)
+	h.routes.RegisterRoute("/translations/delete", TranslationDelete)
 	h.routes.RegisterRoute("/me", MyAccount)
 	h.routes.RegisterRoute("/upload", UploadWS)
 }

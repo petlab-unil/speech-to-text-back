@@ -22,12 +22,14 @@ type Stream struct {
 	fileBuffer      chan []byte
 	StreamResp      chan []byte
 	StreamErr       chan []byte
+	Closed          bool
 	mutex           *sync.Mutex
 	size            int
 	inputEOF        bool
 	mongoSession    *mgo.Session
 	translation     *account.Translation
 	sampleRateHertz int32
+	language        string
 	audioType       speechpb.RecognitionConfig_AudioEncoding
 	model           string
 }
@@ -38,6 +40,7 @@ func NewStream(ctx context.Context,
 	t *account.Translation,
 	size, sampleRateHertz int,
 	audioType speechpb.RecognitionConfig_AudioEncoding,
+	language string,
 	model string) Stream {
 	client, err := speech.NewClient(ctx)
 	if err != nil {
@@ -54,6 +57,7 @@ func NewStream(ctx context.Context,
 		speechClient:    client,
 		speechStream:    speechStream,
 		fileBuffer:      fileBuffer,
+		Closed:          false,
 		StreamResp:      make(chan []byte),
 		StreamErr:       make(chan []byte),
 		mutex:           &sync.Mutex{},
@@ -62,6 +66,7 @@ func NewStream(ctx context.Context,
 		translation:     t,
 		sampleRateHertz: int32(sampleRateHertz),
 		audioType:       audioType,
+		language:        language,
 		model:           model,
 	}
 
@@ -75,7 +80,7 @@ func (s *Stream) initStream() {
 				Config: &speechpb.RecognitionConfig{
 					Encoding:                   s.audioType,
 					SampleRateHertz:            s.sampleRateHertz,
-					LanguageCode:               "fr-FR",
+					LanguageCode:               s.language,
 					EnableAutomaticPunctuation: true,
 					UseEnhanced:                true,
 					Model:                      s.model,
@@ -150,7 +155,9 @@ func (s *Stream) listen(done chan bool) {
 			}
 			collection.UpdateId(s.translation.Id, query)
 			sessionCopy.Close()
-			s.StreamResp <- serialized
+			if !s.Closed {
+				s.StreamResp <- serialized
+			}
 		}
 	}
 	done <- true
