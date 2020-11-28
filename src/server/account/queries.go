@@ -134,17 +134,51 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 func DeleteTranslation(mongoSession *mgo.Session, sess *Session, translationId *string) error {
 	collection := mongoSession.DB("s2t").C("translations")
 	oid := bson.ObjectIdHex(*translationId)
-	err := collection.RemoveId(oid)
 
-	if err != nil {
-		return err
-	}
 	collection = mongoSession.DB("s2t").C("accounts")
-	err = collection.UpdateId(sess.User, bson.M{
+	err := collection.UpdateId(sess.User, bson.M{
 		"$pull": bson.M{
 			"translations": oid,
 		},
 	})
 
+	return err
+}
+
+func AllAccounts(mongoSession *mgo.Session) (accounts []Account, err error) {
+	collection := mongoSession.DB("s2t").C("accounts")
+	err = collection.Pipe([]bson.M{
+		{
+			"$match": &bson.M{},
+		},
+		{
+			"$project": &bson.M{
+				"password":     0,
+				"translations": 0,
+			},
+		},
+	}).All(&accounts)
+	return accounts, err
+}
+
+func ShareTranslation(mongoSession *mgo.Session, translationId *string, userId *string) (err error) {
+	collection := mongoSession.DB("s2t").C("accounts")
+
+	_, err = primitive.ObjectIDFromHex(*userId)
+	if err != nil {
+		return err
+	}
+	_, err = primitive.ObjectIDFromHex(*translationId)
+	if err != nil {
+		return err
+	}
+	oid := bson.ObjectIdHex(*userId)
+	translationOid := bson.ObjectIdHex(*userId)
+
+	err = collection.UpdateId(oid, bson.M{
+		"$addToSet": bson.M{
+			"translations": translationOid,
+		},
+	})
 	return err
 }
