@@ -89,11 +89,15 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 				"from": "translations",
 				"as":   "translations",
 				"let": bson.M{
-					"translationsIdList": "$translations._id",
+					"translations_ids": "$translations",
 				},
 				"pipeline": []bson.M{
 					{
-						"$match": bson.M{},
+						"$match": bson.M{
+							"$expr": bson.M{
+								"$in": []string{"$_id", "$$translations_ids"},
+							},
+						},
 					},
 					{
 						"$group": bson.M{
@@ -125,6 +129,7 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 	err = collection.Pipe(query).One(&a)
 
 	if err != nil {
+		println(err.Error())
 		return nil, err
 	}
 
