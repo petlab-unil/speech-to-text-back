@@ -25,12 +25,10 @@ type ResultEndTime struct {
 }
 
 type Transcript struct {
-	Alternatives  []Alternative `json:"alternatives" bson:"alternatives"`
-	IsFinal       bool          `json:"isfinal" bson:"isfinal"`
-	ResultEndTime ResultEndTime `json:"resultendtime" bson:"resultendtime"`
+	Alternatives []Alternative `json:"alternatives" bson:"alternatives"`
 }
 
-func TranscriptFromResult(result *speechpb.StreamingRecognitionResult) Transcript {
+func TranscriptFromResult(result *speechpb.SpeechRecognitionResult) Transcript {
 	alternatives := make([]Alternative, len(result.Alternatives))
 	for i, alt := range result.Alternatives {
 		alternatives[i] = Alternative{
@@ -40,11 +38,6 @@ func TranscriptFromResult(result *speechpb.StreamingRecognitionResult) Transcrip
 	}
 	return Transcript{
 		Alternatives: alternatives,
-		IsFinal:      result.IsFinal,
-		ResultEndTime: ResultEndTime{
-			Nanos:   result.ResultEndTime.Nanos,
-			Seconds: result.ResultEndTime.Seconds,
-		},
 	}
 }
 
