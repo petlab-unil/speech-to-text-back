@@ -119,6 +119,7 @@ func sendResp(conn *websocket.Conn, stream *Speech2Text.Stream, streamResp chan 
 }
 
 func streamS2t(h *Handler,
+	fileName string,
 	conn *websocket.Conn,
 	size int,
 	newTranslation *account.Translation,
@@ -131,7 +132,7 @@ func streamS2t(h *Handler,
 	ctx := context.Background()
 
 	fileBuffer := make(chan []byte)
-	s := Speech2Text.NewStream(ctx, fileBuffer, h.MongoSession, newTranslation, size, sampleRateHertz, audioType, language, model)
+	s := Speech2Text.NewStream(ctx, fileName, fileBuffer, h.MongoSession, newTranslation, size, sampleRateHertz, audioType, language, model)
 
 	go listen(conn, fileBuffer)
 	go sendResp(conn, &s, s.StreamResp, s.StreamErr)

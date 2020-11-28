@@ -323,5 +323,5 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 	model := r.URL.Query().Get("model")
 	language := r.URL.Query().Get("language")
 
-	streamS2t(h, conn, sizeInt, newTranslation, packetInt, sampleRateHertz, audioType, language, model)
+	streamS2t(h, fileName, conn, sizeInt, newTranslation, packetInt, sampleRateHertz, audioType, language, model)
 }

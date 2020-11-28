@@ -5,12 +5,11 @@ import (
 	"cloud.google.com/go/storage"
 	"context"
 	"encoding/json"
+	"fmt"
 	speechpb "google.golang.org/genproto/googleapis/cloud/speech/v1"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	"io"
 	"log"
-	"os"
 	"speech-to-text-back/src/server/account"
 	"time"
 )
@@ -31,10 +30,12 @@ type Stream struct {
 	model           string
 	streamsCount    int8
 	inputEOF        bool
+	fileName        string
 	uploadBuffer    []byte
 }
 
 func NewStream(ctx context.Context,
+	fileName string,
 	fileBuffer chan []byte,
 	mongoSession *mgo.Session,
 	t *account.Translation,
@@ -63,6 +64,7 @@ func NewStream(ctx context.Context,
 		streamsCount:    0,
 		inputEOF:        false,
 		uploadBuffer:    []byte{},
+		fileName:        fileName,
 	}
 
 	return stream
@@ -77,7 +79,7 @@ func (s *Stream) listenForFile() {
 	}
 }
 
-func (s *Stream) uploadFile(bucket, object string) {
+func (s *Stream) uploadFile() {
 	// bucket := "bucket-name"
 	// object := "object-name"
 	ctx := context.Background()
@@ -95,7 +97,7 @@ func (s *Stream) uploadFile(bucket, object string) {
 	defer cancel()
 
 	// Upload an object with storage.Writer.
-	wc := client.Bucket(bucket).Object(object).NewWriter(ctx)
+	wc := client.Bucket("petlabspeechtool").Object(s.fileName).NewWriter(ctx)
 	if _, err = wc.Write(s.uploadBuffer); err != nil {
 		serialized, _ := json.Marshal(err)
 		s.StreamErr <- serialized
@@ -106,7 +108,6 @@ func (s *Stream) uploadFile(bucket, object string) {
 		s.StreamErr <- serialized
 		return
 	}
-	println("UPLOADED")
 }
 
 func (s *Stream) translate() {
@@ -126,7 +127,8 @@ func (s *Stream) translate() {
 			},
 		},
 		Audio: &speechpb.RecognitionAudio{
-			AudioSource: &speechpb.RecognitionAudio_Uri{Uri: gcsURI},
+			AudioSource: &speechpb.RecognitionAudio_Uri{Uri: fmt.Sprintf("gs://petlabspeechtool/%s", s.fileName),
+			},
 		},
 	}
 	op, err := s.speechClient.LongRunningRecognize(ctx, req)
@@ -158,4 +160,28 @@ func (s *Stream) translate() {
 			s.StreamResp <- serialized
 		}
 	}
+}
+
+func (s *Stream) deleteFile() {
+	ctx := context.Background()
+	client, err := storage.NewClient(ctx)
+
+	if err != nil {
+		serialized, _ := json.Marshal(err)
+		s.StreamErr <- serialized
+		return
+	}
+
+	if err = client.Bucket("petlabspeechtool").Object(s.fileName).Delete(ctx); err != nil {
+		serialized, _ := json.Marshal(err)
+		s.StreamErr <- serialized
+		return
+	}
+}
+
+func (s *Stream) Start() {
+	s.listenForFile()
+	s.uploadFile()
+	s.translate()
+	s.deleteFile()
 }
