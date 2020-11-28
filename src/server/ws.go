@@ -106,16 +106,6 @@ func sendResp(conn *websocket.Conn, stream *Speech2Text.Stream, streamResp chan 
 			serialized, err := json.Marshal(endMessage)
 
 			_, _ = w.Write(serialized)
-
-			_, _ = w.Write(errMsg)
-
-			// Add queued chat messages to the current websocket message.
-			n := len(streamResp)
-			for i := 0; i < n; i++ {
-				_, _ = w.Write(newline)
-				_, _ = w.Write(<-streamResp)
-			}
-
 			if err := w.Close(); err != nil {
 				return
 			}

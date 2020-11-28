@@ -25,7 +25,6 @@ type Stream struct {
 	Closed          bool
 	mutex           *sync.Mutex
 	size            int
-	inputEOF        bool
 	mongoSession    *mgo.Session
 	translation     *account.Translation
 	sampleRateHertz int32
@@ -105,14 +104,15 @@ func (s *Stream) startStream() {
 		fileBuffer := <-s.fileBuffer
 		currentSize += len(fileBuffer)
 		s.mutex.Lock()
-		if len(fileBuffer) > 0 {
+		if len(fileBuffer) >= 32000 {
 			if err := s.speechStream.Send(&speechpb.StreamingRecognizeRequest{
 				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
-					AudioContent: fileBuffer,
+					AudioContent: fileBuffer[:32000],
 				},
 			}); err != nil {
 				s.StreamErr <- []byte(fmt.Sprintf("Could not send audio: %v", err))
 			}
+			time.Sleep(time.Second / 10)
 		} else {
 			_ = s.speechStream.CloseSend()
 			break
@@ -123,9 +123,6 @@ func (s *Stream) startStream() {
 		}
 		s.mutex.Unlock()
 	}
-	s.mutex.Lock()
-	s.inputEOF = true
-	s.mutex.Unlock()
 }
 
 func (s *Stream) listen() {
@@ -133,19 +130,23 @@ func (s *Stream) listen() {
 	for {
 		resp, err := streamCp.Recv()
 		if err == io.EOF {
+			println("EOF")
 			break
 		}
 		if err != nil {
+			println(err.Error())
 			serialized, _ := json.Marshal(err)
 			s.StreamErr <- serialized
 			break
 		}
 		if err := resp.Error; err != nil {
+			println("Err")
 			serialized, _ := json.Marshal(err)
 			s.StreamErr <- serialized
 			break
 		}
 		for _, result := range resp.Results {
+			println("RESULT")
 			serialized, _ := json.Marshal(account.TranscriptFromResult(result))
 			sessionCopy := s.mongoSession.Copy()
 			collection := sessionCopy.DB("s2t").C("translations")
@@ -172,18 +173,18 @@ func (s *Stream) Start() {
 	s.streamsCount = 1
 	go s.listen()
 	for {
-		duration := 2 * time.Minute
+		duration := 30 * time.Second
 		time.Sleep(duration)
 		s.mutex.Lock()
-		if s.inputEOF || s.streamsCount == 0 {
+		if s.streamsCount == 0 {
 			s.mutex.Unlock()
 			break
 		}
-		_ = s.speechStream.CloseSend()
 		speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
 		if err != nil {
 			log.Fatal(err)
 		}
+		_ = s.speechStream.CloseSend()
 		s.speechStream = speechStream
 		s.initStream()
 		s.streamsCount += 1
