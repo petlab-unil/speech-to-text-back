@@ -25,10 +25,12 @@ func MyAccount(h *Handler, w http.ResponseWriter, r *http.Request) {
 
 	auth := r.Header.Get("Authorization")
 
-	a, err := account.FullAccount(h.MongoSession, auth)
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+
+	a, err := account.FullAccount(sessionCopy, auth)
 
 	if err != nil {
-		println(err.Error())
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -39,6 +41,31 @@ func MyAccount(h *Handler, w http.ResponseWriter, r *http.Request) {
 	}
 
 	serialized, err := json.Marshal(a)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, string(serialized))
+}
+
+func AccountList(h *Handler, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	sessionCopy := h.MongoSession.Clone()
+	defer sessionCopy.Close()
+
+	accounts, err := account.AllAccounts(sessionCopy)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	serialized, err := json.Marshal(accounts)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -90,6 +117,38 @@ func OneTranslation(h *Handler, w http.ResponseWriter, r *http.Request) {
 	_, _ = fmt.Fprintf(w, string(serialized))
 }
 
+type TranslationShareRequest struct {
+	TranslationId  string `json:"translationId"`
+	AccountToShare string `json:"accountToShare"`
+}
+
+func TranslationShare(h *Handler, w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	var a TranslationShareRequest
+	err := json.NewDecoder(r.Body).Decode(&a)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+
+	err = account.ShareTranslation(sessionCopy, &a.TranslationId, &a.AccountToShare)
+
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, _ = fmt.Fprintf(w, "ok")
+}
+
 func TranslationDelete(h *Handler, w http.ResponseWriter, r *http.Request) {
 	if r.Method != "POST" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
@@ -135,7 +194,9 @@ func AccountCreate(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = account.CreateAccount(&a, h.MongoSession)
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+	err = account.CreateAccount(&a, sessionCopy)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -159,7 +220,10 @@ func Login(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := account.IdentifyAccount(&a, h.MongoSession)
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+
+	id, err := account.IdentifyAccount(&a, sessionCopy)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -171,7 +235,7 @@ func Login(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := account.CreateSession(*id, h.MongoSession)
+	session, err := account.CreateSession(*id, sessionCopy)
 
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -233,7 +297,9 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 
 	auth := r.URL.Query().Get("Authorization")
 
-	session, err := account.FindSession(h.MongoSession, auth)
+	sessionCopy := h.MongoSession.Copy()
+	defer sessionCopy.Close()
+	session, err := account.FindSession(sessionCopy, auth)
 
 	if err != nil {
 		log.Println(err)
@@ -247,7 +313,7 @@ func UploadWS(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newTranslation, err := account.CreateTranslation(h.MongoSession, fileName, session.User)
+	newTranslation, err := account.CreateTranslation(sessionCopy, fileName, session.User)
 
 	if err != nil {
 		log.Println(err)

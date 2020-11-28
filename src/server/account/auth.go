@@ -46,9 +46,7 @@ func IdentifyAccount(queriedAccount *Account, mongoSession *mgo.Session) (*bson.
 	return &dbAccount.Id, nil
 }
 
-func CreateSession(id bson.ObjectId, mongoSession *mgo.Session) (*Session, error) {
-	sessionCopy := mongoSession.Copy()
-	defer sessionCopy.Close()
+func CreateSession(id bson.ObjectId, sessionCopy *mgo.Session) (*Session, error) {
 	collection := sessionCopy.DB("s2t").C("sessions")
 
 	session := Session{

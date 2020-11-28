@@ -32,6 +32,7 @@ type Stream struct {
 	language        string
 	audioType       speechpb.RecognitionConfig_AudioEncoding
 	model           string
+	streamsCount    int8
 }
 
 func NewStream(ctx context.Context,
@@ -68,6 +69,7 @@ func NewStream(ctx context.Context,
 		audioType:       audioType,
 		language:        language,
 		model:           model,
+		streamsCount:    0,
 	}
 
 	return stream
@@ -126,12 +128,11 @@ func (s *Stream) startStream() {
 	s.mutex.Unlock()
 }
 
-func (s *Stream) listen(done chan bool) {
+func (s *Stream) listen() {
 	streamCp := s.speechStream
 	for {
 		resp, err := streamCp.Recv()
 		if err == io.EOF {
-			fmt.Printf("EOF\n")
 			break
 		}
 		if err != nil {
@@ -153,39 +154,40 @@ func (s *Stream) listen(done chan bool) {
 					"transcripts": result,
 				},
 			}
-			collection.UpdateId(s.translation.Id, query)
+			_ = collection.UpdateId(s.translation.Id, query)
 			sessionCopy.Close()
 			if !s.Closed {
 				s.StreamResp <- serialized
 			}
 		}
 	}
-	done <- true
+	s.mutex.Lock()
+	s.streamsCount -= 1
+	s.mutex.Unlock()
 }
 
 func (s *Stream) Start() {
 	s.initStream()
 	go s.startStream()
-	done := make(chan bool)
-	go s.listen(done)
-	go func() {
-		for {
-			duration := 5*time.Minute - 30*time.Second
-			time.Sleep(duration)
-			s.mutex.Lock()
-			if s.inputEOF {
-				s.mutex.Unlock()
-				break
-			}
-			_ = s.speechStream.CloseSend()
-			speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
-			if err != nil {
-				log.Fatal(err)
-			}
-			s.speechStream = speechStream
-			s.initStream()
+	s.streamsCount = 1
+	go s.listen()
+	for {
+		duration := 2 * time.Minute
+		time.Sleep(duration)
+		s.mutex.Lock()
+		if s.inputEOF || s.streamsCount == 0 {
 			s.mutex.Unlock()
+			break
 		}
-	}()
-	<-done
+		_ = s.speechStream.CloseSend()
+		speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
+		if err != nil {
+			log.Fatal(err)
+		}
+		s.speechStream = speechStream
+		s.initStream()
+		s.streamsCount += 1
+		s.mutex.Unlock()
+		go s.listen()
+	}
 }
