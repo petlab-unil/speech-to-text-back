@@ -56,8 +56,8 @@ type Translation struct {
 
 type Account struct {
 	Id           bson.ObjectId `json:"_id" bson:"_id,omitempty"`
-	Name         string        `json:"name"`
-	Password     string        `json:"password"`
+	Name         string        `json:"name" bson:"name"`
+	Password     string        `json:"password" bson:"password"`
 	Translations []Translation `json:"translations" bson:"translations"`
 }
 
