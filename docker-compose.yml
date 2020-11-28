@@ -8,8 +8,6 @@ services:
     environment:
       - MONGO_HOST=db
       - GOOGLE_APPLICATION_CREDENTIALS=/app/unil.json
-      volumes:
-        - unil.json:/app/unil.json
     ports:
       - 8080:8080
     networks:
