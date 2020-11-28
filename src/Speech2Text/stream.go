@@ -32,6 +32,7 @@ type Stream struct {
 	audioType       speechpb.RecognitionConfig_AudioEncoding
 	model           string
 	streamsCount    int8
+	inputEOF        bool
 }
 
 func NewStream(ctx context.Context,
@@ -69,6 +70,7 @@ func NewStream(ctx context.Context,
 		language:        language,
 		model:           model,
 		streamsCount:    0,
+		inputEOF:        false,
 	}
 
 	return stream
@@ -101,18 +103,18 @@ func (s *Stream) initStream() {
 func (s *Stream) startStream() {
 	currentSize := 0
 	for {
+		s.mutex.Lock()
 		fileBuffer := <-s.fileBuffer
 		currentSize += len(fileBuffer)
-		s.mutex.Lock()
-		if len(fileBuffer) >= 32000 {
+		if len(fileBuffer) > 0 {
 			if err := s.speechStream.Send(&speechpb.StreamingRecognizeRequest{
 				StreamingRequest: &speechpb.StreamingRecognizeRequest_AudioContent{
-					AudioContent: fileBuffer[:32000],
+					AudioContent: fileBuffer,
 				},
 			}); err != nil {
 				s.StreamErr <- []byte(fmt.Sprintf("Could not send audio: %v", err))
 			}
-			time.Sleep(time.Second / 10)
+			s.mutex.Unlock()
 		} else {
 			_ = s.speechStream.CloseSend()
 			break
@@ -121,8 +123,10 @@ func (s *Stream) startStream() {
 			_ = s.speechStream.CloseSend()
 			break
 		}
-		s.mutex.Unlock()
 	}
+	s.mutex.Lock()
+	s.inputEOF = true
+	s.mutex.Unlock()
 }
 
 func (s *Stream) listen() {
@@ -130,23 +134,19 @@ func (s *Stream) listen() {
 	for {
 		resp, err := streamCp.Recv()
 		if err == io.EOF {
-			println("EOF")
 			break
 		}
 		if err != nil {
-			println(err.Error())
 			serialized, _ := json.Marshal(err)
 			s.StreamErr <- serialized
 			break
 		}
 		if err := resp.Error; err != nil {
-			println("Err")
 			serialized, _ := json.Marshal(err)
 			s.StreamErr <- serialized
 			break
 		}
 		for _, result := range resp.Results {
-			println("RESULT")
 			serialized, _ := json.Marshal(account.TranscriptFromResult(result))
 			sessionCopy := s.mongoSession.Copy()
 			collection := sessionCopy.DB("s2t").C("translations")
@@ -173,12 +173,15 @@ func (s *Stream) Start() {
 	s.streamsCount = 1
 	go s.listen()
 	for {
-		duration := 30 * time.Second
+		duration := 290 * time.Second
 		time.Sleep(duration)
 		s.mutex.Lock()
-		if s.streamsCount == 0 {
+		if s.inputEOF {
 			s.mutex.Unlock()
-			break
+			if s.streamsCount == 0 {
+				break
+			}
+			continue
 		}
 		speechStream, err := s.speechClient.StreamingRecognize(s.ctx)
 		if err != nil {
