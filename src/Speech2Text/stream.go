@@ -108,6 +108,7 @@ func (s *Stream) uploadFile() {
 		s.StreamErr <- serialized
 		return
 	}
+	s.uploadBuffer = []byte{}
 }
 
 func (s *Stream) translate() {
@@ -127,8 +128,7 @@ func (s *Stream) translate() {
 			},
 		},
 		Audio: &speechpb.RecognitionAudio{
-			AudioSource: &speechpb.RecognitionAudio_Uri{Uri: fmt.Sprintf("gs://petlabspeechtool/%s", s.fileName),
-			},
+			AudioSource: &speechpb.RecognitionAudio_Uri{Uri: fmt.Sprintf("gs://petlabspeechtool/%s", s.fileName)},
 		},
 	}
 	op, err := s.speechClient.LongRunningRecognize(ctx, req)
