@@ -72,11 +72,37 @@ func NewStream(ctx context.Context,
 
 func (s *Stream) listenForFile() {
 	currentSize := 0
+	shouldReset := make(chan bool)
+	endCounter := make(chan bool)
+	go func() {
+		for {
+			time.Sleep(time.Second * 10)
+			shouldReset <- true
+			shouldBreak := <-endCounter
+			if shouldBreak {
+				return
+			}
+		}
+	}()
+
+	msgReceived := false
+
 	for currentSize < s.size {
-		fileBuffer := <-s.fileBuffer
-		s.uploadBuffer = append(s.uploadBuffer, fileBuffer...)
-		currentSize += len(fileBuffer)
+		select {
+		case fileBuffer := <-s.fileBuffer:
+			msgReceived = true
+			s.uploadBuffer = append(s.uploadBuffer, fileBuffer...)
+			currentSize += len(fileBuffer)
+		case <-shouldReset:
+			if !msgReceived {
+				endCounter <- true
+				return
+			}
+			endCounter <- false
+			msgReceived = false
+		}
 	}
+	endCounter <- true
 }
 
 func (s *Stream) uploadFile() {
@@ -181,7 +207,11 @@ func (s *Stream) deleteFile() {
 
 func (s *Stream) Start() {
 	s.listenForFile()
+	println("Done listening")
 	s.uploadFile()
+	println("Done uploading")
 	s.translate()
+	println("Done translating")
 	s.deleteFile()
+	println("Done deleting")
 }
