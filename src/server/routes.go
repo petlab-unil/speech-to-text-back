@@ -114,7 +114,7 @@ func OneTranslation(h *Handler, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, _ = fmt.Fprintf(w, string(serialized))
+	_, _ = fmt.Fprintf(w, "%s", string(serialized))
 }
 
 type TranslationShareRequest struct {
