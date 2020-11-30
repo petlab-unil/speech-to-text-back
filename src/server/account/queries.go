@@ -177,10 +177,12 @@ func ShareTranslation(mongoSession *mgo.Session, translationId *string, userId *
 	if err != nil {
 		return err
 	}
-	oid := bson.ObjectIdHex(*userId)
+	userOid := bson.ObjectIdHex(*userId)
 	translationOid := bson.ObjectIdHex(*userId)
 
-	err = collection.UpdateId(oid, bson.M{
+	err = collection.Update(bson.M{
+		"_id": userOid,
+	}, bson.M{
 		"$addToSet": bson.M{
 			"translations": translationOid,
 		},
