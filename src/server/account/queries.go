@@ -183,7 +183,7 @@ func ShareTranslation(mongoSession *mgo.Session, translationId *string, userId *
 	err = collection.Update(bson.M{
 		"_id": userOid,
 	}, bson.M{
-		"$addToSet": bson.M{
+		"$push": bson.M{
 			"translations": translationOid,
 		},
 	})
