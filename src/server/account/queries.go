@@ -86,40 +86,16 @@ func FullAccount(mongoSession *mgo.Session, id string) (*bson.M, error) {
 		},
 		{
 			"$lookup": bson.M{
-				"from": "translations",
-				"as":   "translations",
-				"let": bson.M{
-					"translations_ids": "$translations",
-				},
-				"pipeline": []bson.M{
-					{
-						"$match": bson.M{
-							"$expr": bson.M{
-								"$in": []string{"$_id", "$$translations_ids"},
-							},
-						},
-					},
-					{
-						"$group": bson.M{
-							"_id": "$_id",
-							"file_name": bson.M{
-								"$first": "$file_name",
-							},
-						},
-					},
-					{
-						"$project": bson.M{
-							"file_name": 1,
-							"_id":       1,
-						},
-					},
-				},
+				"from":         "translations",
+				"as":           "translations",
+				"localField":   "translations",
+				"foreignField": "_id",
 			},
 		},
 		{
 			"$project": bson.M{
-				"name":         1,
-				"translations": 1,
+				"translations.transcripts": 0,
+				"password":                 0,
 			},
 		},
 	}

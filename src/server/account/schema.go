@@ -6,22 +6,22 @@ import (
 	"time"
 )
 
+type ResultEndTime struct {
+	Nanos   int32 `json:"nanos" bson:"nanos"`
+	Seconds int64 `json:"seconds" bson:"seconds"`
+}
+
 type Word struct {
-	StartTime  string `json:"starttime" bson:"starttime"`
-	EndTime    string `json:"endtime" bson:"endtime"`
-	Word       string `json:"word" bson:"word"`
-	SpeakerTag int8   `json:"speakertag" bson:"speakertag"`
+	StartTime  ResultEndTime `json:"starttime" bson:"starttime"`
+	EndTime    ResultEndTime `json:"endtime" bson:"endtime"`
+	Word       string        `json:"word" bson:"word"`
+	SpeakerTag int8          `json:"speakertag" bson:"speakertag"`
 }
 
 type Alternative struct {
 	Confidence float32 `json:"confidence" bson:"confidence"`
 	Transcript string  `json:"transcript" bson:"transcript"`
 	Words      []Word  `json:"words" bson:"words"`
-}
-
-type ResultEndTime struct {
-	Nanos   int32 `json:"nanos" bson:"nanos"`
-	Seconds int64 `json:"seconds" bson:"seconds"`
 }
 
 type Transcript struct {

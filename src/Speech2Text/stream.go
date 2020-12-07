@@ -73,12 +73,12 @@ func NewStream(ctx context.Context,
 func (s *Stream) listenForFile() {
 	currentSize := 0
 	shouldReset := make(chan bool)
-	endCounter := make(chan bool)
+	// A basic scheduler to close the loop after 10sc without receiving data
 	go func() {
 		for {
 			time.Sleep(time.Second * 10)
 			shouldReset <- true
-			shouldBreak := <-endCounter
+			shouldBreak := <-shouldReset
 			if shouldBreak {
 				return
 			}
@@ -95,14 +95,14 @@ func (s *Stream) listenForFile() {
 			currentSize += len(fileBuffer)
 		case <-shouldReset:
 			if !msgReceived {
-				endCounter <- true
+				shouldReset <- true
 				return
 			}
-			endCounter <- false
+			shouldReset <- false
 			msgReceived = false
 		}
 	}
-	endCounter <- true
+	shouldReset <- true
 }
 
 func (s *Stream) uploadFile() {
@@ -113,7 +113,9 @@ func (s *Stream) uploadFile() {
 
 	if err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 
@@ -126,12 +128,16 @@ func (s *Stream) uploadFile() {
 	wc := client.Bucket("petlabspeechtool").Object(s.fileName).NewWriter(ctx)
 	if _, err = wc.Write(s.uploadBuffer); err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 	if err := wc.Close(); err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 	s.uploadBuffer = []byte{}
@@ -160,13 +166,17 @@ func (s *Stream) translate() {
 	op, err := s.speechClient.LongRunningRecognize(ctx, req)
 	if err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 	resp, err := op.Wait(ctx)
 	if err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 
@@ -183,7 +193,9 @@ func (s *Stream) translate() {
 		_ = collection.UpdateId(s.translation.Id, query)
 		sessionCopy.Close()
 		if !s.Closed {
-			s.StreamResp <- serialized
+			select {
+			case s.StreamErr <- serialized:
+			}
 		}
 	}
 }
@@ -194,13 +206,17 @@ func (s *Stream) deleteFile() {
 
 	if err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 
 	if err = client.Bucket("petlabspeechtool").Object(s.fileName).Delete(ctx); err != nil {
 		serialized, _ := json.Marshal(err)
-		s.StreamErr <- serialized
+		select {
+		case s.StreamErr <- serialized:
+		}
 		return
 	}
 }
